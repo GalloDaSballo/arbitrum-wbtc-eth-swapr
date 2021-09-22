@@ -4,8 +4,8 @@ pragma solidity ^0.6.11;
 pragma experimental ABIEncoderV2;
 
 interface IERC20StakingRewardsDistribution {
-    /// @dev from ERC20
-    function balanceOf(address) external view returns (uint256 balance);
+    /// @dev BalanceOf
+    function stakedTokensOf(address) external view returns (uint256 balance);
 
     /// @dev deposit amount
     function stake(uint256 _amount) external;

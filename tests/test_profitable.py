@@ -28,16 +28,11 @@ def test_is_profitable(deployed):
     assert depositAmount > 0
 
     want.approve(vault.address, MaxUint256, {"from": deployer})
-
     snap.settDeposit(depositAmount, {"from": deployer})
 
     # Earn
     with brownie.reverts("onlyAuthorizedActors"):
         vault.earn({"from": randomUser})
-
-    min = vault.min()
-    max = vault.max()
-    remain = max - min
 
     snap.settEarn({"from": settKeeper})
 

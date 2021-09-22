@@ -27,6 +27,7 @@ contract MyStrategy is BaseStrategy {
     address public lpComponent; // Token we provide liquidity with
     address public reward; // Token we farm and swap to want / lpComponent
 
+    address public constant WBTC = 0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f;
     address public constant WETH = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
 
     IUniswapRouterV2 public constant DX_SWAP_ROUTER =
@@ -69,7 +70,23 @@ contract MyStrategy is BaseStrategy {
         withdrawalFee = _feeConfig[2];
 
         /// @dev do one off approvals here
-        // IERC20Upgradeable(want).safeApprove(gauge, type(uint256).max);
+
+        // Approvals for swaps and LP
+        IERC20Upgradeable(reward).safeApprove(
+            address(DX_SWAP_ROUTER),
+            type(uint256).max
+        );
+        IERC20Upgradeable(WBTC).safeApprove(
+            address(DX_SWAP_ROUTER),
+            type(uint256).max
+        );
+        IERC20Upgradeable(WETH).safeApprove(
+            address(DX_SWAP_ROUTER),
+            type(uint256).max
+        );
+
+        // Approval for deposit
+        IERC20Upgradeable(want).safeApprove(stakingContract, type(uint256).max);
     }
 
     /// @dev Governance Set new stakingContract Function
@@ -109,7 +126,7 @@ contract MyStrategy is BaseStrategy {
     /// @dev Balance of want currently held in strategy positions
     function balanceOfPool() public view override returns (uint256) {
         return
-            IERC20StakingRewardsDistribution(stakingContract).balanceOf(
+            IERC20StakingRewardsDistribution(stakingContract).stakedTokensOf(
                 address(this)
             );
     }
@@ -126,11 +143,13 @@ contract MyStrategy is BaseStrategy {
         override
         returns (address[] memory)
     {
-        address[] memory protectedTokens = new address[](3);
+        address[] memory protectedTokens = new address[](6);
         protectedTokens[0] = want;
         protectedTokens[1] = lpComponent;
         protectedTokens[2] = reward;
         protectedTokens[3] = stakingContract; // Technically this is lpComponent
+        protectedTokens[4] = WBTC; // Technically this is lpComponent
+        protectedTokens[5] = WETH; // Technically this is lpComponent
         return protectedTokens;
     }
 
@@ -151,7 +170,10 @@ contract MyStrategy is BaseStrategy {
     /// @dev invest the amount of want
     /// @notice When this function is called, the controller has already sent want to this
     /// @notice Just get the current balance and then invest accordingly
-    function _deposit(uint256 _amount) internal override {}
+    function _deposit(uint256 _amount) internal override {
+        // NOTE: This reverts if emission has ended, just change the staking contract then
+        IERC20StakingRewardsDistribution(stakingContract).stake(_amount);
+    }
 
     /// @dev utility function to withdraw everything for migration
     function _withdrawAll() internal override {
@@ -196,9 +218,9 @@ contract MyStrategy is BaseStrategy {
             _before
         );
 
-        /// @notice Keep this in so you get paid!
+        /// @notice Take performance fee on want harvested
         (uint256 governancePerformanceFee, uint256 strategistPerformanceFee) =
-            _processRewardsFees(harvested, reward);
+            _processRewardsFees(harvested, want);
 
         // TODO: If you are harvesting a reward token you're not compounding
         // You probably still want to capture fees for it
@@ -230,13 +252,24 @@ contract MyStrategy is BaseStrategy {
         if (toSwap == 0) {
             return;
         }
-        address[] memory path = new address[](3);
+        address[] memory path = new address[](2);
         path[0] = reward;
         path[1] = WETH;
 
-        // Swap 50% swapr for WETH
+        // Swap 100% swapr for WETH
         DX_SWAP_ROUTER.swapExactTokensForTokens(
-            toSwap.mul(50).div(100),
+            toSwap,
+            0,
+            path,
+            address(this),
+            now
+        );
+
+        // Swap 50% of WETH to wBTC
+        path[0] = WETH;
+        path[1] = WBTC;
+        DX_SWAP_ROUTER.swapExactTokensForTokens(
+            IERC20Upgradeable(WETH).balanceOf(address(this)).mul(50).div(100),
             0,
             path,
             address(this),
@@ -245,9 +278,9 @@ contract MyStrategy is BaseStrategy {
 
         // Now that we have WETH and swapr, lp for more want
         DX_SWAP_ROUTER.addLiquidity(
-            reward,
+            WBTC,
             WETH,
-            IERC20Upgradeable(reward).balanceOf(address(this)),
+            IERC20Upgradeable(WBTC).balanceOf(address(this)),
             IERC20Upgradeable(WETH).balanceOf(address(this)),
             0,
             0,
@@ -259,6 +292,10 @@ contract MyStrategy is BaseStrategy {
     /// @dev Rebalance, Compound or Pay off debt here
     function tend() external whenNotPaused {
         _onlyAuthorizedActors();
+        // NOTE: This will revert if staking has ended, just change to next staking contract
+        IERC20StakingRewardsDistribution(stakingContract).stake(
+            IERC20Upgradeable(want).balanceOf(address(this))
+        );
     }
 
     /// ===== Internal Helper Functions =====
