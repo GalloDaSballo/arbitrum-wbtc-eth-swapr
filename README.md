@@ -1,3 +1,43 @@
+# Arbitrum Swapr WBTC/WETH Staking Strat
+
+Want is WBTC/WETH swprLP
+Earn Swapr
+Autocompounds
+
+Some work was taken from: https://github.com/shuklaayush/WBTC-WETH-SLP-Arbitrum-Strategy
+
+## NOTE: TO TEST
+
+Arbitrum fork doesn't work with hardhat out of the box right now (probably because of a JSON-RPC incompatibility with Arbitrum node). We'll test using our own fork of hardhat that circumvents this issue.
+
+### Install Hardhat fork
+
+Clone my fork of hardhat repo somewhere
+
+```bash
+git clone git@github.com:shuklaayush/hardhat.git
+cd hardhat
+git checkout fix/arbitrum
+yarn build
+cd packages/hardhat-core
+yarn pack # Generate hardhat-v2.6.2.tgz
+```
+
+Clone this repo and install hardhat
+
+```bash
+git clone git@github.com:shuklaayush/WETH-Sushi-SLP-Arbitrum-Strategy.git
+yarn add -D <path-to-hardhat-pack-file>
+```
+
+### Run brownie
+
+Import the fork network and run
+
+```
+brownie networks import network-config.yaml
+brownie test
+
 # Badger Strategy V1 Brownie Mix
 
 - Video Introduction: https://youtu.be/FVbhgPYW_D0
@@ -34,15 +74,19 @@ This mix is configured for use with [Ganache](https://github.com/trufflesuite/ga
 7. Install the dependencies in the package
 
 ```
+
 ## Javascript dependencies
+
 npm i
 
 ## Python Dependencies
+
 pip install virtualenv
 virtualenv venv
 source venv/bin/activate
 pip install -r requirements.txt
-```
+
+````
 
 ## Basic Use
 
@@ -52,7 +96,7 @@ To deploy the demo Badger Strategy in a development environment:
 
 ```bash
   brownie console
-```
+````
 
 2. Run Scripts for Deployment
 

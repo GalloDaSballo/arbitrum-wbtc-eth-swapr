@@ -11,6 +11,11 @@ import "../deps/@openzeppelin/contracts-upgradeable/token/ERC20/SafeERC20Upgrade
 
 import "../interfaces/badger/IController.sol";
 
+import {IUniswapRouterV2} from "../interfaces/uniswap/IUniswapRouterV2.sol";
+import {
+    IERC20StakingRewardsDistribution
+} from "../interfaces/swapr/IERC20StakingRewardsDistribution.sol";
+
 import {BaseStrategy} from "../deps/BaseStrategy.sol";
 
 contract MyStrategy is BaseStrategy {
@@ -21,6 +26,14 @@ contract MyStrategy is BaseStrategy {
     // address public want // Inherited from BaseStrategy, the token the strategy wants, swaps into and tries to grow
     address public lpComponent; // Token we provide liquidity with
     address public reward; // Token we farm and swap to want / lpComponent
+
+    address public constant WETH = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
+
+    IUniswapRouterV2 public constant DX_SWAP_ROUTER =
+        IUniswapRouterV2(0x530476d5583724A89c8841eB6Da76E7Af4C0F17E);
+
+    // Can be changed by governance via setStakingContract
+    address public stakingContract = 0x79ba8b76F61Db3e7D994f7E384ba8f7870A043b7;
 
     // Used to signal to the Badger Tree that rewards where sent to it
     event TreeDistribution(
@@ -59,11 +72,33 @@ contract MyStrategy is BaseStrategy {
         // IERC20Upgradeable(want).safeApprove(gauge, type(uint256).max);
     }
 
+    /// @dev Governance Set new stakingContract Function
+    /// @notice this method is "safe" only if governance is a timelock
+    function setStakingContract(address newStakingAddress) external {
+        _onlyGovernance();
+        // Withdraw from old stakingContract
+        IERC20StakingRewardsDistribution(stakingContract).exit(address(this));
+
+        // Remove approvals to old stakingContract
+        IERC20Upgradeable(want).safeApprove(stakingContract, 0);
+
+        // Set new stakingContract
+        stakingContract = newStakingAddress;
+
+        // Add approvals to new stakingContract
+        IERC20Upgradeable(want).safeApprove(stakingContract, type(uint256).max);
+
+        // Deposit all in new stakingContract
+        IERC20StakingRewardsDistribution(stakingContract).stake(
+            IERC20Upgradeable(want).balanceOf(address(this))
+        );
+    }
+
     /// ===== View Functions =====
 
     // @dev Specify the name of the strategy
     function getName() external pure override returns (string memory) {
-        return "StrategyName";
+        return "Arbitrum-swapr-WBTC-WETH";
     }
 
     // @dev Specify the version of the Strategy, for upgrades
@@ -73,7 +108,10 @@ contract MyStrategy is BaseStrategy {
 
     /// @dev Balance of want currently held in strategy positions
     function balanceOfPool() public view override returns (uint256) {
-        return 0;
+        return
+            IERC20StakingRewardsDistribution(stakingContract).balanceOf(
+                address(this)
+            );
     }
 
     /// @dev Returns true if this strategy requires tending
@@ -92,6 +130,7 @@ contract MyStrategy is BaseStrategy {
         protectedTokens[0] = want;
         protectedTokens[1] = lpComponent;
         protectedTokens[2] = reward;
+        protectedTokens[3] = stakingContract; // Technically this is lpComponent
         return protectedTokens;
     }
 
@@ -115,7 +154,13 @@ contract MyStrategy is BaseStrategy {
     function _deposit(uint256 _amount) internal override {}
 
     /// @dev utility function to withdraw everything for migration
-    function _withdrawAll() internal override {}
+    function _withdrawAll() internal override {
+        // Withdraws all and claims rewards
+        IERC20StakingRewardsDistribution(stakingContract).exit(address(this));
+
+        // Swap rewards into want
+        _swapRewardsToWant();
+    }
 
     /// @dev withdraw the specified amount of want, liquidate from lpComponent to want, paying off any necessary debt for the conversion
     function _withdrawSome(uint256 _amount)
@@ -123,6 +168,13 @@ contract MyStrategy is BaseStrategy {
         override
         returns (uint256)
     {
+        // Avoids reverts due to rounding / trying to withdraw slighly too much
+        // safe because of controller slippage check
+        if (_amount > balanceOfPool()) {
+            _amount = balanceOfPool();
+        }
+        IERC20StakingRewardsDistribution(stakingContract).withdraw(_amount);
+
         return _amount;
     }
 
@@ -132,14 +184,21 @@ contract MyStrategy is BaseStrategy {
 
         uint256 _before = IERC20Upgradeable(want).balanceOf(address(this));
 
-        // Write your code here
+        // Claim rewards
+        IERC20StakingRewardsDistribution(stakingContract).claimAll(
+            address(this)
+        );
 
-        uint256 earned =
-            IERC20Upgradeable(want).balanceOf(address(this)).sub(_before);
+        // Swap to want
+        _swapRewardsToWant();
+
+        harvested = IERC20Upgradeable(want).balanceOf(address(this)).sub(
+            _before
+        );
 
         /// @notice Keep this in so you get paid!
         (uint256 governancePerformanceFee, uint256 strategistPerformanceFee) =
-            _processRewardsFees(earned, reward);
+            _processRewardsFees(harvested, reward);
 
         // TODO: If you are harvesting a reward token you're not compounding
         // You probably still want to capture fees for it
@@ -159,18 +218,43 @@ contract MyStrategy is BaseStrategy {
         // }
 
         /// @dev Harvest event that every strategy MUST have, see BaseStrategy
-        emit Harvest(earned, block.number);
+        emit Harvest(harvested, block.number);
 
         /// @dev Harvest must return the amount of want increased
-        return earned;
+        return harvested;
     }
 
-    // Alternative Harvest with Price received from harvester, used to avoid exessive front-running
-    function harvest(uint256 price)
-        external
-        whenNotPaused
-        returns (uint256 harvested)
-    {}
+    function _swapRewardsToWant() internal {
+        uint256 toSwap = IERC20Upgradeable(reward).balanceOf(address(this));
+
+        if (toSwap == 0) {
+            return;
+        }
+        address[] memory path = new address[](3);
+        path[0] = reward;
+        path[1] = WETH;
+
+        // Swap 50% swapr for WETH
+        DX_SWAP_ROUTER.swapExactTokensForTokens(
+            toSwap.mul(50).div(100),
+            0,
+            path,
+            address(this),
+            now
+        );
+
+        // Now that we have WETH and swapr, lp for more want
+        DX_SWAP_ROUTER.addLiquidity(
+            reward,
+            WETH,
+            IERC20Upgradeable(reward).balanceOf(address(this)),
+            IERC20Upgradeable(WETH).balanceOf(address(this)),
+            0,
+            0,
+            address(this),
+            now
+        );
+    }
 
     /// @dev Rebalance, Compound or Pay off debt here
     function tend() external whenNotPaused {
