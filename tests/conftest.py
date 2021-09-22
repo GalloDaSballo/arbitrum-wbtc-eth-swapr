@@ -83,7 +83,7 @@ def deployed():
     WETH = interface.IERC20(strategy.WETH())
     WETH_DEP = interface.IWETH(strategy.WETH())
     WETH_DEP.deposit({"from": deployer, "value": 5000000000000000000})
-    
+
     ## Get some wBTC
     router = interface.IUniswapRouterV2("0x530476d5583724A89c8841eB6Da76E7Af4C0F17E")
     WBTC = interface.IERC20(strategy.WBTC())
@@ -97,8 +97,17 @@ def deployed():
     ## TODO: LP wBTC / ETH on swapr
     WETH.approve(router, WETH.balanceOf(deployer), {"from": deployer})
     WBTC.approve(router, WBTC.balanceOf(deployer), {"from": deployer})
-    router.addLiquidity(WETH, WBTC, WETH.balanceOf(deployer), WBTC.balanceOf(deployer), 0, 0, deployer, 9999999999999999, {"from": deployer})
-
+    router.addLiquidity(
+        WETH,
+        WBTC,
+        WETH.balanceOf(deployer),
+        WBTC.balanceOf(deployer),
+        0,
+        0,
+        deployer,
+        9999999999999999,
+        {"from": deployer},
+    )
 
     return DotMap(
         deployer=deployer,
@@ -170,7 +179,6 @@ def settKeeper(vault):
 @pytest.fixture
 def strategyKeeper(strategy):
     return accounts.at(strategy.keeper(), force=True)
-
 
 
 ## Forces reset before each test
