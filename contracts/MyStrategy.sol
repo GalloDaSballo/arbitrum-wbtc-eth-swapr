@@ -147,9 +147,9 @@ contract MyStrategy is BaseStrategy {
         protectedTokens[0] = want;
         protectedTokens[1] = lpComponent;
         protectedTokens[2] = reward;
-        protectedTokens[3] = stakingContract; // Technically this is lpComponent
-        protectedTokens[4] = WBTC; // Technically this is lpComponent
-        protectedTokens[5] = WETH; // Technically this is lpComponent
+        protectedTokens[3] = stakingContract; //NOTE: may not be needed, but doesn't hurt to have
+        protectedTokens[4] = WBTC;
+        protectedTokens[5] = WETH;
         return protectedTokens;
     }
 
@@ -222,6 +222,8 @@ contract MyStrategy is BaseStrategy {
         (uint256 governancePerformanceFee, uint256 strategistPerformanceFee) =
             _processRewardsFees(harvested, want);
 
+        //NOTE: This strat may end up emitting in future
+
         // TODO: If you are harvesting a reward token you're not compounding
         // You probably still want to capture fees for it
         // // Process Sushi rewards if existing
@@ -276,7 +278,7 @@ contract MyStrategy is BaseStrategy {
             now
         );
 
-        // Now that we have WETH and swapr, lp for more want
+        // Now that we have WBTC and WETH, lp for more want
         DX_SWAP_ROUTER.addLiquidity(
             WBTC,
             WETH,
