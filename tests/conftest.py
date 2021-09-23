@@ -85,7 +85,7 @@ def deployed():
     WETH_DEP.deposit({"from": deployer, "value": 5000000000000000000})
 
     ## Get some wBTC
-    router = interface.IUniswapRouterV2("0x530476d5583724A89c8841eB6Da76E7Af4C0F17E")
+    router = interface.IUniswapRouterV2(strategy.DX_SWAP_ROUTER())
     WBTC = interface.IERC20(strategy.WBTC())
     router.swapExactETHForTokens(
         0,  ## Mint out
