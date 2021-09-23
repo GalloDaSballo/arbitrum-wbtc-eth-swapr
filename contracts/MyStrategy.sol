@@ -294,10 +294,13 @@ contract MyStrategy is BaseStrategy {
     /// @dev Rebalance, Compound or Pay off debt here
     function tend() external whenNotPaused {
         _onlyAuthorizedActors();
-        // NOTE: This will revert if staking has ended, just change to next staking contract
-        IERC20StakingRewardsDistribution(stakingContract).stake(
-            IERC20Upgradeable(want).balanceOf(address(this))
-        );
+
+        if (IERC20Upgradeable(want).balanceOf(address(this)) > 0) {
+            // NOTE: This will revert if staking has ended, just change to next staking contract
+            IERC20StakingRewardsDistribution(stakingContract).stake(
+                IERC20Upgradeable(want).balanceOf(address(this))
+            );
+        }
     }
 
     /// ===== Internal Helper Functions =====

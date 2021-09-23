@@ -2,7 +2,7 @@
 
 Want is WBTC/WETH swprLP
 Earn Swapr
-Autocompounds
+Autocompounds 100%
 
 Some work was taken from: https://github.com/shuklaayush/WBTC-WETH-SLP-Arbitrum-Strategy
 
