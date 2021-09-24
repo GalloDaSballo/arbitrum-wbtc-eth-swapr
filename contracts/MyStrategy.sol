@@ -69,8 +69,10 @@ contract MyStrategy is BaseStrategy {
         performanceFeeStrategist = _feeConfig[1];
         withdrawalFee = _feeConfig[2];
 
-        /// @dev do one off approvals here
+        /// @notice initial staking contract at time of development
+        stakingContract = 0x79ba8b76F61Db3e7D994f7E384ba8f7870A043b7;
 
+        /// @dev do one off approvals here
         // Approvals for swaps and LP
         IERC20Upgradeable(reward).safeApprove(
             address(DX_SWAP_ROUTER),
@@ -93,8 +95,13 @@ contract MyStrategy is BaseStrategy {
     /// @notice this method is "safe" only if governance is a timelock
     function setStakingContract(address newStakingAddress) external {
         _onlyGovernance();
-        // Withdraw from old stakingContract
-        IERC20StakingRewardsDistribution(stakingContract).exit(address(this));
+
+        if (balanceOfPool() > 0) {
+            // Withdraw from old stakingContract
+            IERC20StakingRewardsDistribution(stakingContract).exit(
+                address(this)
+            );
+        }
 
         // Remove approvals to old stakingContract
         IERC20Upgradeable(want).safeApprove(stakingContract, 0);
@@ -105,10 +112,12 @@ contract MyStrategy is BaseStrategy {
         // Add approvals to new stakingContract
         IERC20Upgradeable(want).safeApprove(stakingContract, type(uint256).max);
 
-        // Deposit all in new stakingContract
-        IERC20StakingRewardsDistribution(stakingContract).stake(
-            IERC20Upgradeable(want).balanceOf(address(this))
-        );
+        if (balanceOfWant() > 0) {
+            // Deposit all in new stakingContract
+            IERC20StakingRewardsDistribution(stakingContract).stake(
+                balanceOfWant()
+            );
+        }
     }
 
     /// ===== View Functions =====
@@ -190,14 +199,23 @@ contract MyStrategy is BaseStrategy {
         override
         returns (uint256)
     {
+        if (_amount <= balanceOfWant()) {
+            return _amount;
+        }
+
+        // We need to withdraw more
+        uint256 toWithdrawFromPool = _amount.sub(balanceOfWant());
+
         // Avoids reverts due to rounding / trying to withdraw slighly too much
         // safe because of controller slippage check
-        if (_amount > balanceOfPool()) {
-            _amount = balanceOfPool();
+        if (toWithdrawFromPool > balanceOfPool()) {
+            toWithdrawFromPool = balanceOfPool();
         }
-        IERC20StakingRewardsDistribution(stakingContract).withdraw(_amount);
+        IERC20StakingRewardsDistribution(stakingContract).withdraw(
+            toWithdrawFromPool
+        );
 
-        return _amount;
+        return balanceOfWant();
     }
 
     /// @dev Harvest from strategy mechanics, realizing increase in underlying position

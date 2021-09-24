@@ -68,7 +68,7 @@ def test_strategy_action_permissions(deployer, sett, controller, strategy, want)
         strategy.harvest({"from": randomUser})
 
     for actor in authorizedActors:
-        chain.sleep(10000 * 13)  ## 10k blocks per harvest
+        chain.sleep(1000 * 13)  ## 1k blocks per harvest
         strategy.harvest({"from": actor})
 
     # (if tendable) tend: onlyAuthorizedActors
