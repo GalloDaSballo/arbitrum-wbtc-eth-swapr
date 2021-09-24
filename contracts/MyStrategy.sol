@@ -34,7 +34,7 @@ contract MyStrategy is BaseStrategy {
         IUniswapRouterV2(0x530476d5583724A89c8841eB6Da76E7Af4C0F17E);
 
     // Can be changed by governance via setStakingContract
-    address public stakingContract = 0x79ba8b76F61Db3e7D994f7E384ba8f7870A043b7;
+    address public stakingContract; // NOTE: Set in initialize as we can't set vars here
 
     // Used to signal to the Badger Tree that rewards where sent to it
     event TreeDistribution(
@@ -199,23 +199,22 @@ contract MyStrategy is BaseStrategy {
         override
         returns (uint256)
     {
-        if (_amount <= balanceOfWant()) {
-            return _amount;
+        // Due to rounding errors on the Controller, the amount may be slightly higher than the available amount in edge cases.
+        if (balanceOfWant() < _amount) {
+            uint256 toWithdraw = _amount.sub(balanceOfWant());
+
+            if (balanceOfPool() < toWithdraw) {
+                IERC20StakingRewardsDistribution(stakingContract).withdraw(
+                    balanceOfPool()
+                );
+            } else {
+                IERC20StakingRewardsDistribution(stakingContract).withdraw(
+                    toWithdraw
+                );
+            }
         }
 
-        // We need to withdraw more
-        uint256 toWithdrawFromPool = _amount.sub(balanceOfWant());
-
-        // Avoids reverts due to rounding / trying to withdraw slighly too much
-        // safe because of controller slippage check
-        if (toWithdrawFromPool > balanceOfPool()) {
-            toWithdrawFromPool = balanceOfPool();
-        }
-        IERC20StakingRewardsDistribution(stakingContract).withdraw(
-            toWithdrawFromPool
-        );
-
-        return balanceOfWant();
+        return MathUpgradeable.min(_amount, balanceOfWant());
     }
 
     /// @dev Harvest from strategy mechanics, realizing increase in underlying position
