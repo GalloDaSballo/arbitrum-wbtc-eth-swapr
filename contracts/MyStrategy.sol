@@ -255,7 +255,7 @@ contract MyStrategy is BaseStrategy {
         _onlyAuthorizedActors();
 
         uint256 _before = IERC20Upgradeable(want).balanceOf(address(this));
-        uint256 _beforeHelper =
+        uint256 _beforeLP =
             IERC20Upgradeable(WETH_SWAPR_LP).balanceOf(address(this));
 
         // Claim rewards
@@ -269,15 +269,15 @@ contract MyStrategy is BaseStrategy {
         harvested = IERC20Upgradeable(want).balanceOf(address(this)).sub(
             _before
         );
-        uint256 _afterHelper =
+        uint256 _helperEarned =
             IERC20Upgradeable(WETH_SWAPR_LP).balanceOf(address(this)).sub(
-                _beforeHelper
+                _beforeLP
             );
 
         /// @notice Take performance fee on want harvested
         _processRewardsFees(harvested, want);
         /// @notice Take performance fee on helper we got
-        _processRewardsFees(_afterHelper, WETH_SWAPR_LP);
+        _processRewardsFees(_helperEarned, WETH_SWAPR_LP);
 
         //NOTE: This strat may end up emitting in future
 
