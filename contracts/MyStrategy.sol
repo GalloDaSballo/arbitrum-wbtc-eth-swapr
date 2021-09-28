@@ -279,15 +279,27 @@ contract MyStrategy is BaseStrategy {
         /// @notice Take performance fee on helper we got
         _processRewardsFees(_helperEarned, WETH_SWAPR_LP);
 
-        //NOTE: This strat may end up emitting in future
-
-        // TODO: If you are harvesting a reward token you're not compounding
         uint256 toEmit =
             IERC20Upgradeable(WETH_SWAPR_LP).balanceOf(address(this));
         if (toEmit > 0) {
+            // Performance fee to strategist
+            uint256 toStrategist =
+                toEmit.mul(performanceFeeStrategist).div(MAX_FEE);
+            HELPER_VAULT.depositFor(strategist, toStrategist);
+
+            // Performance fee to governance
+            uint256 toGovernance =
+                toEmit.mul(performanceFeeGovernance).div(MAX_FEE);
+            HELPER_VAULT.depositFor(
+                IController(controller).rewards(),
+                toGovernance
+            );
+
             // NOTE: Would be better to take fees as HELPER_VAULT as they auto-compound for treasury
             uint256 treeBefore = HELPER_VAULT.balanceOf(badgerTree);
-            HELPER_VAULT.depositFor(badgerTree, toEmit);
+            uint256 toTree =
+                IERC20Upgradeable(WETH_SWAPR_LP).balanceOf(address(this));
+            HELPER_VAULT.depositFor(badgerTree, toTree);
             uint256 treeAfter = HELPER_VAULT.balanceOf(badgerTree);
             uint256 emitted = treeAfter.sub(treeBefore);
 
