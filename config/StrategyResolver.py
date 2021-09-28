@@ -1,3 +1,4 @@
+from brownie import interface
 from helpers.StrategyCoreResolver import StrategyCoreResolver
 from rich.console import Console
 
@@ -13,6 +14,7 @@ class StrategyResolver(StrategyCoreResolver):
         strategy = self.manager.strategy
         return {
             "stakingContract": strategy.stakingContract(),
+            "badgerTree": strategy.badgerTree()
         }
 
     def hook_after_confirm_withdraw(self, before, after, params):
@@ -63,6 +65,8 @@ class StrategyResolver(StrategyCoreResolver):
             assert after.balances("want", "governanceRewards") > before.balances(
                 "want", "governanceRewards"
             )
+        
+        assert after.balances("helperVault", "badgerTree") > before.balances("helperVault", "badgerTree")
 
     def confirm_tend(self, before, after, tx):
         """
@@ -73,3 +77,16 @@ class StrategyResolver(StrategyCoreResolver):
         (Strategy Must Implement)
         """
         assert True
+
+    def add_balances_snap(self, calls, entities):
+        """
+            Add tracking for reward
+        """
+        super().add_balances_snap(calls, entities)
+        strategy = self.manager.strategy
+
+        reward = interface.IERC20(strategy.HELPER_VAULT())
+
+        calls = self.add_entity_balances_for_tokens(calls, "helperVault", reward, entities)
+
+        return calls

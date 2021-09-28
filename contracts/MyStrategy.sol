@@ -270,7 +270,9 @@ contract MyStrategy is BaseStrategy {
             _before
         );
         uint256 _afterHelper =
-            IERC20Upgradeable(WETH_SWAPR_LP).balanceOf(address(this));
+            IERC20Upgradeable(WETH_SWAPR_LP).balanceOf(address(this)).sub(
+                _beforeHelper
+            );
 
         /// @notice Take performance fee on want harvested
         _processRewardsFees(harvested, want);
