@@ -109,6 +109,11 @@ def deployed():
         {"from": deployer},
     )
 
+    ## Set up necessary for this vault to work
+    helper_vault = SettV3.at(strategy.HELPER_VAULT())
+    gov = accounts.at(helper_vault.governance(), force=True)
+    helper_vault.approveContractAccess(strategy, {"from": gov})
+
     return DotMap(
         deployer=deployer,
         controller=controller,

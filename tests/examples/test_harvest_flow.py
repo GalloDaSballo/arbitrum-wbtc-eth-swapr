@@ -72,13 +72,13 @@ def test_single_user_harvest_flow(
 
         snap.settTend({"from": strategyKeeper})
 
-    chain.sleep(days(0.5))
+    chain.sleep(100)
     chain.mine()
 
     if tendable:
         snap.settTend({"from": strategyKeeper})
 
-    chain.sleep(days(1))
+    chain.sleep(100)
     chain.mine()
 
     with brownie.reverts("onlyAuthorizedActors"):
@@ -86,7 +86,7 @@ def test_single_user_harvest_flow(
 
     snap.settHarvest({"from": strategyKeeper})
 
-    chain.sleep(days(1))
+    chain.sleep(100)
     chain.mine()
 
     if tendable:
@@ -94,7 +94,7 @@ def test_single_user_harvest_flow(
 
     snap.settWithdraw(shares // 2, {"from": deployer})
 
-    chain.sleep(days(3))
+    chain.sleep(100)
     chain.mine()
 
     snap.settHarvest({"from": strategyKeeper})
@@ -125,7 +125,7 @@ def test_migrate_single_user(
     chain.snapshot()
 
     # Test no harvests
-    chain.sleep(days(2))
+    chain.sleep(100)
     chain.mine()
 
     before = {"settWant": want.balanceOf(sett), "stratWant": strategy.balanceOf()}
@@ -145,7 +145,7 @@ def test_migrate_single_user(
     if strategy.isTendable():
         chain.revert()
 
-        chain.sleep(days(2))
+        chain.sleep(100)
         chain.mine()
 
         strategy.tend({"from": deployer})
@@ -166,13 +166,13 @@ def test_migrate_single_user(
     # Test harvest, with tend if tendable
     chain.revert()
 
-    chain.sleep(days(1))
+    chain.sleep(100)
     chain.mine()
 
     if strategy.isTendable():
         strategy.tend({"from": deployer})
 
-    chain.sleep(days(1))
+    chain.sleep(100)
     chain.mine()
 
     before = {
@@ -215,7 +215,7 @@ def test_withdraw_other(deployer, sett, controller, strategy, want):
 
     sett.earn({"from": deployer})
 
-    chain.sleep(days(0.5))
+    chain.sleep(100)
     chain.mine()
 
     if strategy.isTendable():
@@ -223,7 +223,7 @@ def test_withdraw_other(deployer, sett, controller, strategy, want):
 
     strategy.harvest({"from": deployer})
 
-    chain.sleep(days(0.5))
+    chain.sleep(100)
     chain.mine()
 
     mockAmount = Wei("1000 ether")
@@ -269,13 +269,13 @@ def test_single_user_harvest_flow_remove_fees(
     # Earn
     snap.settEarn({"from": deployer})
 
-    chain.sleep(days(0.5))
+    chain.sleep(100)
     chain.mine()
 
     if tendable:
         snap.settTend({"from": deployer})
 
-    chain.sleep(days(1))
+    chain.sleep(100)
     chain.mine()
 
     with brownie.reverts("onlyAuthorizedActors"):
@@ -286,13 +286,13 @@ def test_single_user_harvest_flow_remove_fees(
     ## NOTE: Some strats do not do this, change accordingly
     assert want.balanceOf(controller.rewards()) > 0
 
-    chain.sleep(days(1))
+    chain.sleep(199)
     chain.mine()
 
     if tendable:
         snap.settTend({"from": deployer})
 
-    chain.sleep(days(3))
+    chain.sleep(100)
     chain.mine()
 
     snap.settHarvest({"from": deployer})

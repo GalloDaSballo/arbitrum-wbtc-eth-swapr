@@ -10,6 +10,7 @@ import "../deps/@openzeppelin/contracts-upgradeable/utils/AddressUpgradeable.sol
 import "../deps/@openzeppelin/contracts-upgradeable/token/ERC20/SafeERC20Upgradeable.sol";
 
 import "../interfaces/badger/IController.sol";
+import "../interfaces/badger/ISett.sol";
 
 import {IUniswapRouterV2} from "../interfaces/uniswap/IUniswapRouterV2.sol";
 import {
@@ -30,11 +31,25 @@ contract MyStrategy is BaseStrategy {
     address public constant WBTC = 0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f;
     address public constant WETH = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
 
+    // LP component we create when depositing weth/swapr, used for deposits to helper vault
+    address public constant WETH_SWAPR_LP =
+        0xA66b20912cBEa522278f3056B4aE60D0d3EE271b;
+    // Vault for WETH/SWAPR, we deposit 50% of reward value as WETH/SWAPR
+    // NOTE: At time of coding this is the development vault with development settings
+    // Make sure the helper_vault has been configured properly before pushing this strat to prod
+    ISett public constant HELPER_VAULT =
+        ISett(0x0c2153e8aE4DB8233c61717cDC4c75630E952561);
+
+    // Got from REGISTRY.get("badgerTree")
+    address public constant badgerTree =
+        0x635EB2C39C75954bb53Ebc011BDC6AfAAcE115A6;
+
     IUniswapRouterV2 public constant DX_SWAP_ROUTER =
         IUniswapRouterV2(0x530476d5583724A89c8841eB6Da76E7Af4C0F17E);
 
     // Can be changed by governance via setStakingContract
     address public stakingContract; // NOTE: Set in initialize as we can't set vars here
+    bool public autocompoundOnWithdrawAll; // Should we swap rewards to want in withdrawAll? // False by default
 
     // Used to signal to the Badger Tree that rewards where sent to it
     event TreeDistribution(
@@ -89,6 +104,12 @@ contract MyStrategy is BaseStrategy {
 
         // Approval for deposit
         IERC20Upgradeable(want).safeApprove(stakingContract, type(uint256).max);
+
+        // Approval to allow depositFor for badgerTree
+        IERC20Upgradeable(WETH_SWAPR_LP).safeApprove(
+            address(HELPER_VAULT),
+            type(uint256).max
+        );
     }
 
     /// @dev Governance Set new stakingContract Function
@@ -96,15 +117,17 @@ contract MyStrategy is BaseStrategy {
     function setStakingContract(address newStakingAddress) external {
         _onlyGovernance();
 
-        if (balanceOfPool() > 0) {
-            // Withdraw from old stakingContract
-            IERC20StakingRewardsDistribution(stakingContract).exit(
-                address(this)
-            );
-        }
+        require(newStakingAddress != address(0));
 
-        // Remove approvals to old stakingContract
-        IERC20Upgradeable(want).safeApprove(stakingContract, 0);
+        if (stakingContract != address(0)) {
+            if (balanceOfPool() > 0) {
+                // Withdraw from old stakingContract
+                IERC20StakingRewardsDistribution(stakingContract).exit(
+                    address(this)
+                );
+            }
+            IERC20Upgradeable(want).safeApprove(stakingContract, 0);
+        }
 
         // Set new stakingContract
         stakingContract = newStakingAddress;
@@ -120,11 +143,18 @@ contract MyStrategy is BaseStrategy {
         }
     }
 
+    function setAutocompoundOnWithdrawAll(bool newAutocompoundOnWithdrawAll)
+        public
+    {
+        _onlyGovernance();
+        autocompoundOnWithdrawAll = newAutocompoundOnWithdrawAll;
+    }
+
     /// ===== View Functions =====
 
     // @dev Specify the name of the strategy
     function getName() external pure override returns (string memory) {
-        return "Arbitrum-swapr-WBTC-WETH";
+        return "Arbitrum-WBTC-WETH-swapr";
     }
 
     // @dev Specify the version of the Strategy, for upgrades
@@ -189,8 +219,11 @@ contract MyStrategy is BaseStrategy {
         // Withdraws all and claims rewards
         IERC20StakingRewardsDistribution(stakingContract).exit(address(this));
 
-        // Swap rewards into want
-        _swapRewardsToWant();
+        // False by default
+        if (autocompoundOnWithdrawAll) {
+            // Swap rewards into want
+            _swapRewardsToWant();
+        }
     }
 
     /// @dev withdraw the specified amount of want, liquidate from lpComponent to want, paying off any necessary debt for the conversion
@@ -222,6 +255,8 @@ contract MyStrategy is BaseStrategy {
         _onlyAuthorizedActors();
 
         uint256 _before = IERC20Upgradeable(want).balanceOf(address(this));
+        uint256 _beforeHelper =
+            IERC20Upgradeable(WETH_SWAPR_LP).balanceOf(address(this));
 
         // Claim rewards
         IERC20StakingRewardsDistribution(stakingContract).claimAll(
@@ -234,29 +269,34 @@ contract MyStrategy is BaseStrategy {
         harvested = IERC20Upgradeable(want).balanceOf(address(this)).sub(
             _before
         );
+        uint256 _afterHelper =
+            IERC20Upgradeable(WETH_SWAPR_LP).balanceOf(address(this));
 
         /// @notice Take performance fee on want harvested
-        (uint256 governancePerformanceFee, uint256 strategistPerformanceFee) =
-            _processRewardsFees(harvested, want);
+        _processRewardsFees(harvested, want);
+        /// @notice Take performance fee on helper we got
+        _processRewardsFees(_afterHelper, WETH_SWAPR_LP);
 
         //NOTE: This strat may end up emitting in future
 
         // TODO: If you are harvesting a reward token you're not compounding
-        // You probably still want to capture fees for it
-        // // Process Sushi rewards if existing
-        // if (sushiAmount > 0) {
-        //     // Process fees on Sushi Rewards
-        //     // NOTE: Use this to receive fees on the reward token
-        //     _processRewardsFees(sushiAmount, SUSHI_TOKEN);
+        uint256 toEmit =
+            IERC20Upgradeable(WETH_SWAPR_LP).balanceOf(address(this));
+        if (toEmit > 0) {
+            // NOTE: Would be better to take fees as HELPER_VAULT as they auto-compound for treasury
+            uint256 treeBefore = HELPER_VAULT.balanceOf(badgerTree);
+            HELPER_VAULT.depositFor(badgerTree, toEmit);
+            uint256 treeAfter = HELPER_VAULT.balanceOf(badgerTree);
+            uint256 emitted = treeAfter.sub(treeBefore);
 
-        //     // Transfer balance of Sushi to the Badger Tree
-        //     // NOTE: Send reward to badgerTree
-        //     uint256 sushiBalance = IERC20Upgradeable(SUSHI_TOKEN).balanceOf(address(this));
-        //     IERC20Upgradeable(SUSHI_TOKEN).safeTransfer(badgerTree, sushiBalance);
-        //
-        //     // NOTE: Signal the amount of reward sent to the badger tree
-        //     emit TreeDistribution(SUSHI_TOKEN, sushiBalance, block.number, block.timestamp);
-        // }
+            // NOTE: Signal the amount of reward sent to the badger tree
+            emit TreeDistribution(
+                address(HELPER_VAULT),
+                emitted,
+                block.number,
+                block.timestamp
+            );
+        }
 
         /// @dev Harvest event that every strategy MUST have, see BaseStrategy
         emit Harvest(harvested, block.number);
@@ -272,18 +312,31 @@ contract MyStrategy is BaseStrategy {
             return;
         }
         address[] memory path = new address[](2);
-        path[0] = reward;
+        path[0] = reward; // Swapr
         path[1] = WETH;
 
-        // Swap 100% swapr for WETH
+        // Swap 75% swapr for WETH
         DX_SWAP_ROUTER.swapExactTokensForTokens(
-            toSwap,
+            toSwap.mul(75).div(100),
             0,
             path,
             address(this),
             now
         );
 
+        // Provide liqudity to SWAPR / WETH HERE
+        DX_SWAP_ROUTER.addLiquidity(
+            reward,
+            WETH,
+            IERC20Upgradeable(reward).balanceOf(address(this)),
+            IERC20Upgradeable(WETH).balanceOf(address(this)), // Note this may make input too high, need to test
+            0,
+            0,
+            address(this),
+            now
+        );
+
+        // Of the remaining (it's going to be 50% of initial reward value)
         // Swap 50% of WETH to wBTC
         path[0] = WETH;
         path[1] = WBTC;
