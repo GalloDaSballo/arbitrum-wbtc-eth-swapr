@@ -122,9 +122,7 @@ contract MyStrategy is BaseStrategy {
         if (stakingContract != address(0)) {
             if (balanceOfPool() > 0) {
                 // Withdraw from old stakingContract
-                IERC20StakingRewardsDistribution(stakingContract).exit(
-                    address(this)
-                );
+                _withdrawAll();
             }
             IERC20Upgradeable(want).safeApprove(stakingContract, 0);
         }
@@ -135,10 +133,11 @@ contract MyStrategy is BaseStrategy {
         // Add approvals to new stakingContract
         IERC20Upgradeable(want).safeApprove(stakingContract, type(uint256).max);
 
-        if (balanceOfWant() > 0) {
+        uint256 balanceOfWant = balanceOfWant();
+        if (balanceOfWant > 0) {
             // Deposit all in new stakingContract
             IERC20StakingRewardsDistribution(stakingContract).stake(
-                balanceOfWant()
+                balanceOfWant
             );
         }
     }
@@ -222,7 +221,7 @@ contract MyStrategy is BaseStrategy {
         // False by default
         if (autocompoundOnWithdrawAll) {
             // Swap rewards into want
-            _swapRewardsToWant();
+            _swapRewardsToWantAndLP();
         }
     }
 
@@ -262,7 +261,7 @@ contract MyStrategy is BaseStrategy {
         );
 
         // Swap to want
-        _swapRewardsToWant();
+        _swapRewardsToWantAndLP();
 
         harvested = IERC20Upgradeable(want).balanceOf(address(this)).sub(
             _before
@@ -311,7 +310,7 @@ contract MyStrategy is BaseStrategy {
         return harvested;
     }
 
-    function _swapRewardsToWant() internal {
+    function _swapRewardsToWantAndLP() internal {
         uint256 toSwap = IERC20Upgradeable(reward).balanceOf(address(this));
 
         if (toSwap == 0) {
