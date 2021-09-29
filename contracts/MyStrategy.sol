@@ -136,9 +136,7 @@ contract MyStrategy is BaseStrategy {
         uint256 balanceOfWant = balanceOfWant();
         if (balanceOfWant > 0) {
             // Deposit all in new stakingContract
-            IERC20StakingRewardsDistribution(stakingContract).stake(
-                balanceOfWant
-            );
+            _deposit(balanceOfWant);
         }
     }
 
@@ -366,15 +364,13 @@ contract MyStrategy is BaseStrategy {
         );
     }
 
-    /// @dev Rebalance, Compound or Pay off debt here
+    /// @dev If any want is uninvested, let's invest here
     function tend() external whenNotPaused {
         _onlyAuthorizedActors();
-
-        if (IERC20Upgradeable(want).balanceOf(address(this)) > 0) {
+        uint256 balanceOfWant = balanceOfWant();
+        if (balanceOfWant > 0) {
             // NOTE: This will revert if staking has ended, just change to next staking contract
-            IERC20StakingRewardsDistribution(stakingContract).stake(
-                IERC20Upgradeable(want).balanceOf(address(this))
-            );
+            _deposit(balanceOfWant);
         }
     }
 
