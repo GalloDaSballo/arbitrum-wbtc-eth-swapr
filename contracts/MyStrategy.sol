@@ -154,7 +154,7 @@ contract MyStrategy is BaseStrategy {
 
     // @dev Specify the name of the strategy
     function getName() external pure override returns (string memory) {
-        return "Arbitrum-WBTC-WETH-swapr";
+        return "Arbitrum-swapr-WBTC-WETH";
     }
 
     // @dev Specify the version of the Strategy, for upgrades
@@ -335,7 +335,7 @@ contract MyStrategy is BaseStrategy {
             reward,
             WETH,
             IERC20Upgradeable(reward).balanceOf(address(this)),
-            IERC20Upgradeable(WETH).balanceOf(address(this)), // Note this may make input too high, need to test
+            IERC20Upgradeable(WETH).balanceOf(address(this)),
             0,
             0,
             address(this),
