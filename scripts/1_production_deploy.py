@@ -78,7 +78,7 @@ def main():
 def deploy_controller(dev, proxyAdmin):
 
     controller_logic = Controller.at(
-        "0x01d10fdc6b484BE380144dF12EB6C75387EfC49B"
+        "0x30bCE7386e016D6038201F57D1bA52CbA7AEFeCf"
     )  # Controller Logic
 
     # Deployer address will be used for all actors as controller will only be used for testing
@@ -124,7 +124,7 @@ def deploy_vault(controller, governance, keeper, guardian, dev, proxyAdmin):
     print("Vault Arguments: ", args)
 
     vault_logic = SettV3.at(
-        "0xAF0B504BD20626d1fd57F8903898168FCE7ecbc8"
+        "0x800C92438ca3c0087562D5ca9DCCee0A6579e955"
     )  # SettV3 Logic
 
     vault_proxy = AdminUpgradeabilityProxy.deploy(
@@ -166,7 +166,7 @@ def deploy_strategy(
 
     print("Strategy Arguments: ", args)
 
-    strat_logic = MyStrategy.deploy({"from": dev})
+    strat_logic = MyStrategy.at("0xD1a9dd43518e389bB467efc6574F7f658B28d224")
     time.sleep(sleep_between_tx)
 
     strat_proxy = AdminUpgradeabilityProxy.deploy(
