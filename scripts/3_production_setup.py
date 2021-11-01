@@ -93,11 +93,11 @@ def set_parameters(dev, strategy, vault, governance, guardian, keeper, controlle
     if strategy.performanceFeeStrategist() != 1000:
         strategy.setPerformanceFeeStrategist(1000, {"from": dev})
         time.sleep(sleep_between_tx)
-    if strategy.withdrawalFee() != 50:
-        strategy.setWithdrawalFee(50, {"from": dev})
+    if strategy.withdrawalFee() != 10:
+        strategy.setWithdrawalFee(10, {"from": dev})
         time.sleep(sleep_between_tx)
 
-    console.print("[green]Fees existing or set at: [/green]", "1000, 1000, 50")
+    console.print("[green]Fees existing or set at: [/green]", "1000, 1000, 10")
 
     # Set permissioned accounts
     if strategy.keeper() != keeper:
@@ -147,7 +147,7 @@ def check_parameters(
 
     assert strategy.performanceFeeGovernance() == 1000
     assert strategy.performanceFeeStrategist() == 1000
-    assert strategy.withdrawalFee() == 50
+    assert strategy.withdrawalFee() == 10
 
     assert strategy.keeper() == keeper
     assert vault.keeper() == keeper
