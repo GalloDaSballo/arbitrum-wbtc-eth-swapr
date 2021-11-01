@@ -14,7 +14,7 @@ from helpers.time import days
 def test_my_custom_test(deployer, sett, strategy, want):
     old_staking_contract = strategy.stakingContract()
 
-    new_staking = "0x79ba8b76F61Db3e7D994f7E384ba8f7870A043b7"  ## Random Address
+    new_staking = "0xa83B103076c993B15FE5dc89c48d3099E2D6f789"  ## Random Address
 
     with brownie.reverts("onlyGovernance"):
         strategy.setStakingContract(new_staking, {"from": deployer})
