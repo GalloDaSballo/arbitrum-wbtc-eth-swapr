@@ -1,11 +1,22 @@
 import brownie
 import pytest
-from brownie import MyStrategy
+
+
+@pytest.fixture
+def dev(accounts):
+    yield accounts[0]
 
 
 @pytest.fixture
 def strat_proxy(Contract):
     yield Contract.from_explorer("0x43942cEae98CC7485B48a37fBB1aa5035e1c8B46")
+
+
+@pytest.fixture
+def new_logic(Contract):  # MyStrategy, dev
+    # logic = MyStrategy.deploy({"from": dev})
+    logic = Contract.from_explorer("0x0d724E8AEE6F73b35A596C8C947c92c75eAc7818")
+    yield logic
 
 
 @pytest.fixture
@@ -15,8 +26,7 @@ def proxy_admin(strat_proxy, web3, Contract):
     yield Contract(web3.eth.getStorageAt(strat_proxy.address, ADMIN_SLOT)[12:])
 
 
-def test_upgrade(accounts, interface, strat_proxy, proxy_admin):
-    deployer = accounts[0]
+def test_upgrade(interface, strat_proxy, new_logic, proxy_admin):
     controller = interface.IController(strat_proxy.controller())
     want = interface.IERC20(strat_proxy.want())
     vault = interface.ISett(controller.vaults(want))
@@ -63,7 +73,6 @@ def test_upgrade(accounts, interface, strat_proxy, proxy_admin):
     stakingContract = strat_proxy.stakingContract()
 
     ## Upgrade
-    new_logic = MyStrategy.deploy({"from": deployer})
     owner = proxy_admin.owner()
     proxy_admin.upgrade(strat_proxy, new_logic, {"from": owner})
     print(f"Proxy admin: {proxy_admin.address}")
