@@ -213,14 +213,27 @@ contract MyStrategy is BaseStrategy {
 
     /// @dev utility function to withdraw everything for migration
     function _withdrawAll() internal override {
-        // Withdraws all and claims rewards
-        IERC20StakingRewardsDistribution(stakingContract).exit(address(this));
+        IERC20StakingRewardsDistribution _stakingContract =
+            IERC20StakingRewardsDistribution(stakingContract);
 
-        // False by default
-        if (autocompoundOnWithdrawAll) {
-            // Swap rewards into want
-            _swapRewardsToWantAndLP();
+        uint256[] memory rewards =
+            _stakingContract.claimableRewards(address(this));
+        for (uint256 i; i < rewards.length; i++) {
+            if (rewards[i] > 0) {
+                // Withdraws all and claims rewards
+                _stakingContract.exit(address(this));
+                // False by default
+                if (autocompoundOnWithdrawAll) {
+                    // Swap rewards into want
+                    _swapRewardsToWantAndLP();
+                }
+                return;
+            }
         }
+        // Withdraws all without claiming rewards
+        _stakingContract.withdraw(
+            _stakingContract.stakedTokensOf(address(this))
+        );
     }
 
     /// @dev withdraw the specified amount of want, liquidate from lpComponent to want, paying off any necessary debt for the conversion
